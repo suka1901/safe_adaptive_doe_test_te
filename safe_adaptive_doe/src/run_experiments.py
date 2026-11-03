@@ -81,7 +81,7 @@ def run_doe_seed(seed: int, budget: int) -> dict:
     ff = make_dataset(seed=seed)
     out = {}
     for key, h in generate_orders("doe", seed, budget, ff).items():
-        res = {"n": [], "rmse": [], "coverage": [], "false_safe": [], "trips": []}
+        res: dict = {"n": [], "rmse": [], "coverage": [], "false_safe": [], "trips": []}
         for n in CHECKPOINTS:
             if n > len(h.order):
                 break
@@ -98,7 +98,7 @@ def run_bo_seed(seed: int, budget: int) -> dict:
     f_star = float(ff.f_true[ff.safe_true].max())
     out = {}
     for key, h in generate_orders("bo", seed, budget, ff).items():
-        res = {"n": [], "regret": [], "trips": []}
+        res: dict = {"n": [], "regret": [], "trips": []}
         for n in BO_CHECKPOINTS:
             if n > len(h.order):
                 break
