@@ -1,0 +1,44 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1"        # full suite incl. slow tests, Mondays 03:00 UTC
+  workflow_dispatch:           # "Run workflow" button on GitHub
+
+defaults:
+  run:
+    working-directory: safe_adaptive_doe
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: safe_adaptive_doe/requirements-dev.txt
+
+      - name: Install
+        run: pip install -r requirements-dev.txt
+
+      - name: Type check (Pyright, same engine as Pylance)
+        run: pyright
+
+      - name: Fast tests
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        run: pytest -m "not slow" --cov --cov-report=term-missing
+
+      - name: Full tests (incl. slow regression)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: pytest --cov --cov-report=term-missing
