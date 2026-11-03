@@ -50,13 +50,37 @@ def evaluate_model(ff, order, seed):
     return rmse, coverage, false_safe, trips
 
 
+GP_STRATEGIES = {"safe_active", "safe_bo", "bo_unsafe"}
+
+
+def generate_orders(exp: str, seed: int, budget: int, ff=None) -> dict[str, st.History]:
+    """Run every strategy of one experiment ("doe" or "bo") for one seed.
+
+    The strategies share one random generator in a fixed order, so this function is the
+    single place that defines how a seed maps to measurement sequences (the replay tests use it).
+    """
+    ff = make_dataset(seed=seed) if ff is None else ff
+    table, offset = (DOE, 1000) if exp == "doe" else (BO, 2000)
+    rng = np.random.default_rng(offset + seed)
+    out = {}
+    for key, fn in table.items():
+        kw = {"beta": BETA, "seed": seed} if key in GP_STRATEGIES else {}
+        out[key] = fn(ff, budget, rng, **kw)
+    return out
+
+
+def bo_checkpoint(ff, order, n: int, f_star: float) -> tuple[float, int]:
+    """Regret of the recommended point (best measured safe point) and trips after n measurements."""
+    idx = np.array(order[:n])
+    ok = idx[ff.T_meas[idx] <= T_LIMIT]                     # usable measurements
+    best = ok[np.argmax(ff.f_meas[ok])]                       # recommend best measured safe point
+    return float(f_star - ff.f_true[best]), int((ff.T_true[idx] > T_LIMIT).sum())
+
+
 def run_doe_seed(seed: int, budget: int) -> dict:
     ff = make_dataset(seed=seed)
-    rng = np.random.default_rng(1000 + seed)
     out = {}
-    for key, fn in DOE.items():
-        kw = {"beta": BETA, "seed": seed} if key == "safe_active" else {}
-        h = fn(ff, budget, rng, **kw)
+    for key, h in generate_orders("doe", seed, budget, ff).items():
         res = {"n": [], "rmse": [], "coverage": [], "false_safe": [], "trips": []}
         for n in CHECKPOINTS:
             if n > len(h.order):
@@ -71,22 +95,17 @@ def run_doe_seed(seed: int, budget: int) -> dict:
 
 def run_bo_seed(seed: int, budget: int) -> dict:
     ff = make_dataset(seed=seed)
-    rng = np.random.default_rng(2000 + seed)
-    f_star = ff.f_true[ff.safe_true].max()
+    f_star = float(ff.f_true[ff.safe_true].max())
     out = {}
-    for key, fn in BO.items():
-        kw = {"beta": BETA, "seed": seed} if key in ("safe_bo", "bo_unsafe") else {}
-        h = fn(ff, budget, rng, **kw)
+    for key, h in generate_orders("bo", seed, budget, ff).items():
         res = {"n": [], "regret": [], "trips": []}
         for n in BO_CHECKPOINTS:
             if n > len(h.order):
                 break
-            idx = np.array(h.order[:n])
-            ok = idx[ff.T_meas[idx] <= T_LIMIT]                     # usable measurements
-            best = ok[np.argmax(ff.f_meas[ok])]                       # recommend best measured safe point
+            regret, trips = bo_checkpoint(ff, h.order, n, f_star)
             res["n"].append(n)
-            res["regret"].append(float(f_star - ff.f_true[best]))
-            res["trips"].append(int((ff.T_true[idx] > T_LIMIT).sum()))
+            res["regret"].append(regret)
+            res["trips"].append(trips)
         res["name"], res["order"] = h.name, [int(i) for i in h.order]
         out[key] = res
     return out
@@ -217,6 +236,7 @@ def main() -> None:
         lines.append(f"| {bo[0][m]['name']} | {med} | {R[:, ns.index(20)].mean():.2f} | {R[:, -1].mean():.2f} | {T[:, -1].mean():.1f} |")
     (RESULTS / "summary.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
+    print("\nTo turn these results into the regression test baseline: python src/make_baseline.py")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,18 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra --strict-markers"
+markers = [
+    "slow: longer end-to-end runs (deselect with -m \"not slow\")",
+]
+filterwarnings = [
+    "ignore::sklearn.exceptions.ConvergenceWarning",
+]
+
+[tool.coverage.run]
+source = ["src"]
+
+[tool.pyright]
+include = ["src", "tests"]
+extraPaths = ["src"]
+typeCheckingMode = "standard"

@@ -3,5 +3,9 @@
     "python-envs.defaultPackageManager": "ms-python.python:conda",
     "python.analysis.extraPaths": [
         "safe_adaptive_doe/src"
-    ]
+    ],
+    "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+    "python.testing.cwd": "${workspaceFolder}/safe_adaptive_doe",
+    "python.testing.pytestArgs": ["tests"]
 }
